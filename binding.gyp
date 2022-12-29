@@ -27,6 +27,9 @@
             ],
             "defines": [
             ],
+            "libraries": [
+                "-lsodium"
+            ],
             "cflags_cc": [
                 "-std=c++11",
                 "-Wl,--whole-archive",
