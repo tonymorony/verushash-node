@@ -243,57 +243,63 @@ void verusHashV2b2(const v8::FunctionCallbackInfo<Value>& args) {
     char* solution = (buff + 140 + 3);
     unsigned int sol_ver = ((solution[0]) + (solution[1] << 8) + (solution[2] << 16) + (solution[3] << 24));
     if (sol_ver > 6) {
-        const uint8_t descrBits = solution[4];
+        //const uint8_t descrBits = solution[4];
         const uint8_t numPBaaSHeaders = solution[5];
-        const uint16_t extraSpace = solution[6] | ((uint16_t)(solution[7]) << 8);
+        //const uint16_t extraSpace = solution[6] | ((uint16_t)(solution[7]) << 8);
         const uint32_t soln_header_size = 4 + 1 + 1 + 2 + 32 + 32; // version, descr, numPBaas, extraSpace, hashPrevMMRroot, hashBlockMMRroot
         const uint32_t soln_pbaas_cid_size = 20;   // hash160
         const uint32_t soln_pbaas_prehash_sz = 32; // pre header hash blake2b
+        // if pbaas headers present
+        if (numPBaaSHeaders > 0) {
+            unsigned char preHeader[32 + 32 + 32 + 32 + 4 + 32 + 32] = { 0, };
 
-        unsigned char preHeader[32 + 32 + 32 + 32 + 4 + 32 + 32];
-        memset(&preHeader[0], 0, sizeof(preHeader));
+            // copy non-conical items from block header
+            memcpy(&preHeader[0], buff + 4, 32);           // hashPrevBlock
+            memcpy(&preHeader[32], buff + 4 + 32, 32);      // hashMerkleRoot
+            memcpy(&preHeader[64], buff + 4 + 32 + 32, 32); // hashFinalSaplingRoot
+            memcpy(&preHeader[96], buff + 4 + 32 + 32 + 32 + 4 + 4, 32); // nNonce (if nonce changes must update preHeaderHash in solution)
+            memcpy(&preHeader[128], buff + 4 + 32 + 32 + 32 + 4, 4); // nbits
+            memcpy(&preHeader[132], solution + 8, 32 + 32);  // hashPrevMMRRoot, hashPrevMMRRoot
 
-        // copy non-conical items from block header
-        memcpy(&preHeader[  0], buff + 4, 32);           // hashPrevBlock
-        memcpy(&preHeader[ 32], buff + 4 + 32, 32);      // hashMerkleRoot
-        memcpy(&preHeader[ 64], buff + 4 + 32 + 32, 32); // hashFinalSaplingRoot
-        memset(&preHeader[ 96], 0, 32); // nNonce (if nonce changes must update preHeaderHash in solution)
-        memcpy(&preHeader[128], buff + 4 + 32 + 32 + 32 + 4, 4); // nbits
-        memcpy(&preHeader[132], solution + 8, 32 + 32);  // hashPrevMMRRoot, hashPrevMMRRoot
-
-        // detect if merged mining is present and clear non-conical data (if needed)
-        int matched_zeros = 0;
-        for (int i = 0; i < sizeof(preHeader); i++) {
-            if (preHeader[i] == 0) { matched_zeros++; }
-        }
-        // if the data has already been cleared of non-conical data, must be merged mining
-        if (matched_zeros != sizeof(preHeader)) {
-            // detect merged mining by looking for preHeaderHash (blake2b) in first pbaas chain definition
-            int matched_hashes = 0;
-            uint256 preHeaderHash = blake2b_hash(&preHeader[0], sizeof(preHeader));
-            if (!preHeaderHash.IsNull()) {
-                if (memcmp((unsigned char*)&preHeaderHash,
-                    &solution[soln_header_size + soln_pbaas_cid_size],
-                    soln_pbaas_prehash_sz) == 0) {
-                    matched_hashes++;
+            // detect if merged mining is present and clear non-conical data (if needed)
+            int matched_zeros = 0;
+            for (int i = 0; i < sizeof(preHeader); i++) {
+                if (preHeader[i] == 0) { matched_zeros++; }
+            }
+            // if the data has already been cleared of non-conical data, just continue along
+            if (matched_zeros != sizeof(preHeader)) {
+                // detect merged mining by looking for preHeaderHash (blake2b) in first pbaas chain definition
+                int matched_hashes = 0;
+                uint256 preHeaderHash = blake2b_hash(&preHeader[0], sizeof(preHeader));
+                if (!preHeaderHash.IsNull()) {
+                    if (memcmp((unsigned char*)&preHeaderHash,
+                        &solution[soln_header_size + soln_pbaas_cid_size],
+                        soln_pbaas_prehash_sz) == 0) {
+                        matched_hashes++;
+                    }
                 }
+                // clear non-conical data for pbaas merge mining
+                if (matched_hashes > 0) {
+                    memset(buff + 4, 0, 32 + 32 + 32);              // hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot
+                    memset(buff + 4 + 32 + 32 + 32 + 4, 0, 4);      // nBits
+                    memset(buff + 4 + 32 + 32 + 32 + 4 + 4, 0, 32); // nNonce
+                    memset(solution + 8, 0, 32 + 32);               // hashPrevMMRRoot, hashBlockMMRRoot
+
+                    //printf("info: merged mining %d chains, clearing non-conical data on hash found\n", numPBaaSHeaders);
+                }
+                else {
+                    //printf("info: merged mining not enabled\n", numPBaaSHeaders);
+                }
+            } else {
+                //printf("info: merged mining %d chains, non-conical data pre-cleared\n", numPBaaSHeaders);
             }
-            // clear non-conical data for pbaas merge mining
-            if (matched_hashes > 0) {
-                memset(buff + 4, 0, 32 + 32 + 32);              // hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot
-                memset(buff + 4 + 32 + 32 + 32 + 4, 0, 4);      // nBits
-                memset(buff + 4 + 32 + 32 + 32 + 4 + 4, 0, 32); // nNonce
-                memset(solution + 8, 0, 32 + 32);               // hashPrevMMRRoot, hashBlockMMRRoot
-                //printf("info: merged mining %d chains, clearing conical data on hash found\n", numPBaaSHeaders);
-            }
-        } else {
-            //printf("info: merged mining %d chains, conical data is cleared\n", numPBaaSHeaders);
         }
     }
 
     vh2b2->Reset();
     vh2b2->Write((const unsigned char *)buff, node::Buffer::Length(buffer));
     vh2b2->Finalize2b((unsigned char *)result);
+
     args.GetReturnValue().Set(Nan::NewBuffer(result, 32).ToLocalChecked());
 }
 
