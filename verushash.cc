@@ -239,7 +239,7 @@ void verusHashV2b2(const v8::FunctionCallbackInfo<Value>& args) {
         initialize();
     }
 
-    // detect pbaas, validate and clear non-conical data if needed
+    // detect pbaas, validate and clear non-canonical data if needed
     char* solution = (buff + 140 + 3);
     unsigned int sol_ver = ((solution[0]) + (solution[1] << 8) + (solution[2] << 16) + (solution[3] << 24));
     if (sol_ver > 6) {
@@ -253,7 +253,7 @@ void verusHashV2b2(const v8::FunctionCallbackInfo<Value>& args) {
         if (numPBaaSHeaders > 0) {
             unsigned char preHeader[32 + 32 + 32 + 32 + 4 + 32 + 32] = { 0, };
 
-            // copy non-conical items from block header
+            // copy non-canonical items from block header
             memcpy(&preHeader[0], buff + 4, 32);           // hashPrevBlock
             memcpy(&preHeader[32], buff + 4 + 32, 32);      // hashMerkleRoot
             memcpy(&preHeader[64], buff + 4 + 32 + 32, 32); // hashFinalSaplingRoot
@@ -261,12 +261,13 @@ void verusHashV2b2(const v8::FunctionCallbackInfo<Value>& args) {
             memcpy(&preHeader[128], buff + 4 + 32 + 32 + 32 + 4, 4); // nbits
             memcpy(&preHeader[132], solution + 8, 32 + 32);  // hashPrevMMRRoot, hashPrevMMRRoot
 
-            // detect if merged mining is present and clear non-conical data (if needed)
+            // detect if merged mining is present and clear non-canonical data (if needed)
             int matched_zeros = 0;
             for (int i = 0; i < sizeof(preHeader); i++) {
                 if (preHeader[i] == 0) { matched_zeros++; }
             }
-            // if the data has already been cleared of non-conical data, just continue along
+
+            // if the data has already been cleared of non-canonical data, just continue along
             if (matched_zeros != sizeof(preHeader)) {
                 // detect merged mining by looking for preHeaderHash (blake2b) in first pbaas chain definition
                 int matched_hashes = 0;
@@ -278,20 +279,19 @@ void verusHashV2b2(const v8::FunctionCallbackInfo<Value>& args) {
                         matched_hashes++;
                     }
                 }
-                // clear non-conical data for pbaas merge mining
+                // clear non-canonical data for pbaas merge mining
                 if (matched_hashes > 0) {
                     memset(buff + 4, 0, 32 + 32 + 32);              // hashPrevBlock, hashMerkleRoot, hashFinalSaplingRoot
                     memset(buff + 4 + 32 + 32 + 32 + 4, 0, 4);      // nBits
                     memset(buff + 4 + 32 + 32 + 32 + 4 + 4, 0, 32); // nNonce
                     memset(solution + 8, 0, 32 + 32);               // hashPrevMMRRoot, hashBlockMMRRoot
-
-                    //printf("info: merged mining %d chains, clearing non-conical data on hash found\n", numPBaaSHeaders);
+                    //printf("info: merged mining %d chains, clearing non-canonical data on hash found\n", numPBaaSHeaders);
                 }
                 else {
                     //printf("info: merged mining not enabled\n", numPBaaSHeaders);
                 }
             } else {
-                //printf("info: merged mining %d chains, non-conical data pre-cleared\n", numPBaaSHeaders);
+                //printf("info: merged mining %d chains, non-canonical data pre-cleared\n", numPBaaSHeaders);
             }
         }
     }
