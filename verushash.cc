@@ -286,9 +286,11 @@ void verusHashV2b2(const v8::FunctionCallbackInfo<Value>& args) {
                     memset(buff + 4 + 32 + 32 + 32 + 4 + 4, 0, 32); // nNonce
                     memset(solution + 8, 0, 32 + 32);               // hashPrevMMRRoot, hashBlockMMRRoot
                     //printf("info: merged mining %d chains, clearing non-canonical data on hash found\n", numPBaaSHeaders);
-                }
-                else {
-                    //printf("info: merged mining not enabled\n", numPBaaSHeaders);
+                } else {
+                    // invalid share, pbaas activated must be pbaas mining capatible
+                    memset(result, 0xff, 32);
+                    args.GetReturnValue().Set(Nan::NewBuffer(result, 32).ToLocalChecked());
+                    return;
                 }
             } else {
                 //printf("info: merged mining %d chains, non-canonical data pre-cleared\n", numPBaaSHeaders);
